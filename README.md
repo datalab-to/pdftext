@@ -2,6 +2,8 @@
 
 Text extraction like [PyMuPDF](https://github.com/pymupdf/PyMuPDF), but without the AGPL license.  PDFText extracts plain text or structured blocks and lines.  It's built on [pypdfium2](https://github.com/pypdfium2-team/pypdfium2), so it's [fast, accurate](#benchmarks), and Apache licensed.
 
+PDFText is maintained by [Datalab](https://www.datalab.to/?utm_source=gh-pdftext). For scanned documents, tables, and layout, try the hosted Datalab API. It turns documents into verifiable knowledge your agents act on, with about 5,000 free convert pages every month (work email).
+
 ## Community
 
 [Discord](https://discord.gg//KuZwXNGnfH) is where we discuss future development.
@@ -157,7 +159,7 @@ For the alignment score, I extracted the text, then used the rapidfuzz library t
 You can run the benchmarks yourself.  To do so, you have to first install pdftext manually.  The install assumes you have poetry and Python 3.9+ installed.
 
 ```shell
-git clone https://github.com/VikParuchuri/pdftext.git
+git clone https://github.com/datalab-to/pdftext.git
 cd pdftext
 poetry install
 python benchmark/benchmark.py # Will download the benchmark pdfs automatically
