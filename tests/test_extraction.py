@@ -210,3 +210,86 @@ def test_perpendicular_text_separate_lines(tmp_path):
             texts = {span["text"].strip() for span in line["spans"] if span["text"].strip()}
             assert not ({"horizontal body text", "vertical label"} <= texts), \
                 "perpendicular text merged into one line"
+
+
+def test_superscript_overlapping_bbox(tmp_path):
+    # Tests that candidate superscripts whose bounding box slightly overlaps horizontally
+    # with the previous span (x0 < bx1 < x1) are correctly split and identified as superscripts.
+    stream_content = b"""BT
+/F1 12 Tf
+72 700 Td
+(mc) Tj
+0.7 0 0 0.7 87.5 706 Tm
+(2) Tj
+ET
+"""
+    raw_pdf = (
+        b"%PDF-1.4\n"
+        b"1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj\n"
+        b"2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj\n"
+        b"3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >> endobj\n"
+        b"4 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> endobj\n"
+        b"5 0 obj << /Length " + str(len(stream_content)).encode() + b" >> stream\n"
+        + stream_content
+        + b"endstream\nendobj\n"
+        b"trailer << /Root 1 0 R >>"
+    )
+
+    path = tmp_path / "superscript_overlap.pdf"
+    path.write_bytes(raw_pdf)
+
+    pages: Pages = dictionary_output(str(path))
+    assert len(pages) == 1
+    spans = pages[0]["blocks"][0]["lines"][0]["spans"]
+    assert len(spans) == 2
+    assert spans[0]["text"] == "mc"
+    assert spans[0]["superscript"] is False
+    assert spans[1]["text"] == "2"
+    assert spans[1]["superscript"] is True
+
+
+def test_get_spans_superscript_overlap():
+    import numpy as np
+    from pdftext.pdf.chars import PageChars
+    from pdftext.pdf.pages import get_spans
+
+    fonts = [{"name": "TestFont", "flags": 0, "size": 10, "weight": 400}]
+    # 'x' span followed by '2' with slight horizontal overlap (x0=109.8 < bx1=110.0, x1=115.8 > 110.0)
+    boxes = np.array([
+        [100.0, 100.0, 110.0, 120.0],
+        [109.8, 95.0, 115.8, 107.0],
+    ], dtype=np.float64)
+
+    chars = PageChars(
+        text="x2",
+        codes=np.array([ord("x"), ord("2")], dtype=np.uint32),
+        rotations=np.zeros(2, dtype=np.float64),
+        boxes=boxes,
+        font_ids=np.zeros(2, dtype=np.int32),
+        fonts=fonts,
+        char_indices=np.array([0, 1], dtype=np.int64),
+    )
+
+    spans = get_spans(chars)
+    assert len(spans) == 2
+    assert spans[0]["text"] == "x"
+    assert spans[1]["text"] == "2"
+
+    # Non-advancing character (e.g. an accent positioned on top, x1 <= bx1) should not trigger superscript break
+    boxes_non_advancing = np.array([
+        [100.0, 100.0, 110.0, 120.0],
+        [102.0, 95.0, 108.0, 107.0],
+    ], dtype=np.float64)
+
+    chars_non_advancing = PageChars(
+        text="x^",
+        codes=np.array([ord("x"), ord("^")], dtype=np.uint32),
+        rotations=np.zeros(2, dtype=np.float64),
+        boxes=boxes_non_advancing,
+        font_ids=np.zeros(2, dtype=np.int32),
+        fonts=fonts,
+        char_indices=np.array([0, 1], dtype=np.int64),
+    )
+
+    spans_non_advancing = get_spans(chars_non_advancing)
+    assert len(spans_non_advancing) == 1

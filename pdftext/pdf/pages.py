@@ -159,7 +159,7 @@ def get_spans(chars: PageChars, superscript_height_threshold: float = 0.8, line_
             or (
                 y0[j] < by0 - height * line_distance_threshold
                 and y1[j] < height * superscript_height_threshold + by0
-                and x0[j] > bx1
+                and x1[j] > bx1
             )
         ):
             span_bounds.append((start, j, [bx0, by0, bx1, by1]))
