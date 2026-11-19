@@ -25,3 +25,8 @@ def test_postprocess_text_special_chars():
 
 def test_postprocess_text_control_chars():
     assert postprocess_text("a\x00b\x02c\nd") == "ab\x02c\nd"
+
+
+def test_handle_hyphens_keeps_paragraph_break_after_continuation():
+    text = "a very inter\x02\nnational.\n\nThe quick brown\n\n"
+    assert handle_hyphens(text, keep_hyphens=False) == "a very international.\n\nThe quick brown\n\n"
