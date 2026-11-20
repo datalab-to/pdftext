@@ -144,19 +144,22 @@ def test_rotated_page_bbox_not_inverted(rotated_pdf_path):
     assert round(bbox[3] - bbox[1]) == pages[0]["height"]
 
 
-def test_surrogate_unicode_sanitized(surrogate_pdf_path):
+def test_utf16_surrogate_pairs(surrogate_pdf_path):
     import json
 
     pages: Pages = dictionary_output(surrogate_pdf_path, keep_chars=True)
-    json.dumps(pages, ensure_ascii=False).encode("utf-8")  # must not raise
-    chars = [
-        c["char"]
-        for b in pages[0]["blocks"]
-        for l in b["lines"]
-        for s in l["spans"]
-        for c in s["chars"]
+    json.dumps(pages, ensure_ascii=False).encode("utf-8")
+    spans = [
+        span
+        for block in pages[0]["blocks"]
+        for line in block["lines"]
+        for span in line["spans"]
     ]
-    assert "�" in chars and "B" in chars
+    expected = "\ufffdB\U0001d44e\ufffdE"
+    assert "".join(span["text"] for span in spans) == expected
+    chars = [char for span in spans for char in span["chars"]]
+    assert [char["char"] for char in chars] == list(expected)
+    assert [char["char_idx"] for char in chars] == [0, 1, 2, 4, 5]
 
 
 def test_cjk_text(tmp_path):

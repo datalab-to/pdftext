@@ -18,13 +18,13 @@ class PageChars:
     __slots__ = ("text", "codes", "rotations", "boxes", "font_ids", "fonts", "char_indices")
 
     def __init__(self, text: str, codes, rotations, boxes, font_ids, fonts: List[Dict], char_indices):
-        self.text = text                  # one python char per pdfium char
+        self.text = text                  # one Python char per decoded code point
         self.codes = codes                # uint32[n] unicode code points
         self.rotations = rotations        # float64[n] radians from FPDFText_GetCharAngle
         self.boxes = boxes                # float64[n, 4] display-space x0, y0, x1, y1
         self.font_ids = font_ids          # int32[n] indices into fonts
         self.fonts = fonts                # interned font dicts, one per unique font
-        self.char_indices = char_indices  # int64[n] original pdfium char indices
+        self.char_indices = char_indices  # int64[n] first PDFium index of each char
 
     def __len__(self):
         return len(self.codes)
@@ -73,13 +73,19 @@ def get_chars(textpage: pdfium.PdfTextPage, page_bbox: list[float], page_rotatio
     box_r = []
     box_t = []
     font_ids = []
+    pair_starts = []
 
     for i in range(n):
         code = get_unicode(textpage_raw, i)
         if 0xD800 <= code <= 0xDFFF:
-            # Lone surrogates (from broken ToUnicode CMaps) can't be encoded
-            # to UTF-8 and would crash JSON/file output downstream
+            # A lone surrogate cannot be written to UTF-8 JSON.
+            high = code
             code = 0xFFFD
+            if high <= 0xDBFF and i + 1 < n:
+                low = get_unicode(textpage_raw, i + 1)
+                if 0xDC00 <= low <= 0xDFFF:
+                    code = 0x10000 + ((high - 0xD800) << 10) + (low - 0xDC00)
+                    pair_starts.append(i)
 
         rotation = get_char_angle(textpage_raw, i)
         loosebox = (rotation == 0) and (code != 39 or quote_loosebox)  # 39 == ord("'")
@@ -154,14 +160,34 @@ def get_chars(textpage: pdfium.PdfTextPage, page_bbox: list[float], page_rotatio
         x0, y0, x1, y1 = nx0, ny0, nx1, ny1
 
     codes_arr = np.fromiter(codes, np.uint32, n)
+    rotations_arr = np.fromiter(rotations, np.float64, n)
+    boxes = np.stack([x0, y0, x1, y1], axis=1)
+    font_ids_arr = np.fromiter(font_ids, np.int32, n)
+    char_indices = np.arange(n, dtype=np.int64)
+    if pair_starts:
+        first = np.array(pair_starts, dtype=np.intp)
+        second = first + 1
+        # PDFium can report the same glyph box for both units. Union the
+        # boxes and keep the first unit's index, font and rotation.
+        boxes[first, :2] = np.minimum(boxes[first, :2], boxes[second, :2])
+        boxes[first, 2:] = np.maximum(boxes[first, 2:], boxes[second, 2:])
+        keep = np.ones(n, dtype=bool)
+        keep[second] = False
+        codes_arr = codes_arr[keep]
+        rotations_arr = rotations_arr[keep]
+        boxes = boxes[keep]
+        font_ids_arr = font_ids_arr[keep]
+        char_indices = char_indices[keep]
+        codes = codes_arr.tolist()
+
     return PageChars(
         "".join(map(chr, codes)),
         codes_arr,
-        np.fromiter(rotations, np.float64, n),
-        np.stack([x0, y0, x1, y1], axis=1),
-        np.fromiter(font_ids, np.int32, n),
+        rotations_arr,
+        boxes,
+        font_ids_arr,
         fonts,
-        np.arange(n, dtype=np.int64),
+        char_indices,
     )
 
 

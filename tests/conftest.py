@@ -42,24 +42,29 @@ def encrypted_pdf_path(tmp_path_factory):
 
 @pytest.fixture(scope="session")
 def surrogate_pdf_path(tmp_path_factory):
-    # Minimal PDF whose ToUnicode CMap maps 'A' to a lone surrogate (U+D800)
-    pdf = b"""%PDF-1.4
+    # Map C to U+1D44E, with a lone high and a lone low surrogate on either side.
+    contents = b"BT /F1 24 Tf 72 700 Td (ABCDE) Tj ET\n"
+    cmap = b"""/CIDInit /ProcSet findresource begin 12 dict begin begincmap
+1 begincodespacerange <00> <FF> endcodespacerange
+3 beginbfchar
+<41> <D800>
+<43> <D835DC4E>
+<44> <DC00>
+endbfchar
+endcmap CMapName currentdict /CMap defineresource pop end end
+"""
+    pdf = b"""%%PDF-1.4
 1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj
 2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj
 3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >> endobj
 4 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Helvetica /ToUnicode 6 0 R >> endobj
-5 0 obj << /Length 44 >> stream
-BT /F1 24 Tf 72 700 Td (AB) Tj ET
-endstream
+5 0 obj << /Length %d >> stream
+%bendstream
 endobj
-6 0 obj << /Length 196 >> stream
-/CIDInit /ProcSet findresource begin 12 dict begin begincmap
-1 begincodespacerange <00> <FF> endcodespacerange
-1 beginbfchar <41> <D800> endbfchar
-endcmap CMapName currentdict /CMap defineresource pop end end
-endstream
+6 0 obj << /Length %d >> stream
+%bendstream
 endobj
-trailer << /Root 1 0 R >>"""
+trailer << /Root 1 0 R >>""" % (len(contents), contents, len(cmap), cmap)
     path = tmp_path_factory.mktemp("fixtures") / "surrogate.pdf"
     path.write_bytes(pdf)
     return str(path)
