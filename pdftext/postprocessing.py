@@ -52,17 +52,24 @@ def handle_hyphens(text: str, keep_hyphens=False) -> str:
     else:
         new_text = ""
         found_hyphen = False
+        continued = False
         for i in range(len(text)):
             if text[i] == HYPHEN_CHAR:
                 found_hyphen = True
+                continued = False
             elif found_hyphen:
                 if text[i] in LINE_BREAKS:
-                    pass
+                    # A line break after the rest of the word ends it (the
+                    # word was the whole line, e.g. the end of a paragraph).
+                    if continued:
+                        new_text += text[i]
+                        found_hyphen = False
                 elif text[i] in SPACES:
                     new_text = new_text.rstrip() + "\n"
                     found_hyphen = False
                 else:
                     new_text += text[i]
+                    continued = True
             else:
                 new_text += text[i]
         text = new_text
